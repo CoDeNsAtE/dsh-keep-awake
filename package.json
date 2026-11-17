@@ -1,0 +1,49 @@
+{
+  "name": "dsh-keep-awake",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Keep Windows (and selected background apps such as VMware) running while the laptop lid is closed.",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "lib",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "README.md",
+    "icon.svg"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ]
+    }
+  },
+  "author": "CoDeNsAtE",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CoDeNsAtE/dsh-keep-awake.git"
+  },
+  "homepage": "https://github.com/CoDeNsAtE/dsh-keep-awake#readme",
+  "keywords": [
+    "deepseek-harness",
+    "dsh-plugin",
+    "windows",
+    "lid",
+    "modern-standby",
+    "keep-awake"
+  ]
+}

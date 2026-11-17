@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Keep awake with the lid closed",
+    "description": "Holds a Windows system power request so this machine — and every background app you tick in its small window, such as VMware — keeps working after you close the lid instead of entering Modern Standby. Open it from the round button above Settings in the left sidebar, or ask the agent to run keep_awake. The request is released the moment you turn it off, when the app closes, or when the host exits; battery drains faster while it holds, and changing the lid-close action itself needs one Windows administrator prompt."
+  }
+}

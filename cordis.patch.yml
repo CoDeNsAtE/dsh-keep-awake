@@ -1,0 +1,4 @@
+- insert:
+    - id: keep-awake
+      name: dsh-keep-awake
+      config: {}
