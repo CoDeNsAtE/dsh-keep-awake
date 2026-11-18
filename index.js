@@ -120,6 +120,17 @@ function summarize(snapshot) {
   const mode = state.mode === 'always' ? '一直保持' : state.mode === 'apps' ? '按选中应用' : 'DSH 工作时'
   const parts = [hold.active ? `保活中（${mode}）` : `未保活（${mode}）`]
   if (hold.active && hold.since) parts.push(`已持续 ${duration(Date.now() - hold.since)}`)
+  if (hold.reason?.code === 'dsh-busy') {
+    const jobs = typeof hold.reason.jobs === 'number' ? hold.reason.jobs : 0
+    const sessions = typeof hold.reason.count === 'number' ? hold.reason.count : 0
+    const said = []
+    if (sessions > 0) said.push(`会话 ${sessions} 个`)
+    if (jobs > 0) said.push(`后台任务 ${jobs} 个`)
+    if (said.length > 0) parts.push(`DSH 在忙: ${said.join(' + ')}`)
+  }
+  if (hold.reason?.code === 'grace') {
+    parts.push(`宽限中 ${Math.max(1, Math.ceil((hold.reason.remainingMs || 0) / 1000))} 秒（工作已结束，仍在保活）`)
+  }
   if (!state.enabled) parts.push('总开关关闭')
   const running = state.watch.filter((entry) => entry.running).map((entry) => entry.name)
   parts.push(running.length ? `运行中: ${running.join(', ')}` : `待命中: ${state.watch.map((entry) => entry.name).join(', ') || '(未选择应用)'}`)
@@ -163,21 +174,112 @@ export function apply(ctx, config = {}) {
   void engine.start().catch((error) => logger.warn(`engine start failed: ${describe(error)}`))
 
   // DSH activity drives mode `busy`; both events are plain global emits.
+  // Every session id we ever see is kept: a background job it started may
+  // still be running after its turn ended.
+  const knownSessions = new Set()
   ctx.on('api-session/status', (sessionId, running) => {
+    if (typeof sessionId === 'string') knownSessions.add(sessionId)
     engine.setSessionBusy(sessionId, running === true)
   })
   ctx.on('agent/status', (payload) => {
     const id = payload?.agent?.id
-    if (typeof id === 'string') engine.setSessionBusy(id, payload?.status === 'running')
+    if (typeof id !== 'string') return
+    knownSessions.add(id)
+    engine.setSessionBusy(id, payload?.status === 'running')
   })
   try {
     const agents = ctx.get?.('agents')
     for (const agent of agents?.list?.() || []) {
+      if (typeof agent?.id === 'string') knownSessions.add(agent.id)
       if (agent?.status === 'running') engine.setSessionBusy(agent.id, true)
     }
   } catch {
     /* no registry yet: the status events will seed it. */
   }
+
+  // A background job (a `run_in_background` command, a background subagent,
+  // a workflow) outlives the turn that started it, so `agent/status` alone
+  // would report "idle" while it is still writing files. Job events are the
+  // registry's own signal; the timer catches jobs registered before this row
+  // loaded and any event lost across a reload.
+  const jobsDiagnostics = { wired: false, sessions: 0, listed: null, live: null, error: null, at: null }
+  // `jobs.list(caller)` only returns the jobs a session owns, so the registry
+  // has to be asked once per session that could own background work.
+  const sessionIds = () => {
+    const ids = new Set(knownSessions)
+    try {
+      for (const agent of ctx.get?.('agents')?.list?.() || []) {
+        if (typeof agent?.id === 'string') ids.add(agent.id)
+      }
+    } catch {
+      /* registry gone: the known set still covers the live turns. */
+    }
+    return [...ids]
+  }
+  const syncJobs = (jobs) => {
+    try {
+      const live = new Map()
+      for (const sessionId of sessionIds()) {
+        for (const job of jobs.list(sessionId) || []) {
+          if (job?.status === 'running' || job?.status === 'stopping') {
+            const label = typeof job.label === 'string' ? job.label.replace(/\s+/g, ' ').trim().slice(0, 40) : ''
+            live.set(job.id, label)
+          }
+        }
+      }
+      engine.setBackgroundActivity(live.size, [...live.values()])
+      jobsDiagnostics.wired = true
+      jobsDiagnostics.sessions = sessionIds().length
+      jobsDiagnostics.listed = live.size
+      jobsDiagnostics.live = live.size
+      jobsDiagnostics.error = null
+      jobsDiagnostics.at = new Date().toISOString()
+    } catch (error) {
+      jobsDiagnostics.error = describe(error)
+      logger.warn(`job activity unreadable: ${describe(error)}`)
+    }
+  }
+  if (typeof ctx.inject === 'function') {
+    try {
+      ctx.inject(['jobs'], (scope) => {
+        const jobs = scope?.jobs ?? ctx.get('jobs')
+        if (!jobs || typeof jobs.list !== 'function') {
+          jobsDiagnostics.error = 'jobs service missing on inject'
+          return
+        }
+        syncJobs(jobs)
+        const unwatch =
+          typeof jobs.events?.subscribe === 'function'
+            ? jobs.events.subscribe({ owners: 'all' }, () => syncJobs(jobs))
+            : () => {}
+        const timer = setInterval(() => syncJobs(jobs), 10000)
+        if (typeof timer.unref === 'function') timer.unref()
+        scope.effect(() => () => {
+          unwatch()
+          clearInterval(timer)
+        })
+      })
+    } catch (error) {
+      jobsDiagnostics.error = describe(error)
+      logger.warn(`jobs injection failed: ${describe(error)}`)
+    }
+  }
+
+  // Reconcile sessions every 15s: an event fired while this row was reloading
+  // would otherwise leave a session marked busy forever.
+  const syncAgents = () => {
+    try {
+      const agents = ctx.get?.('agents')
+      for (const agent of agents?.list?.() || []) {
+        if (typeof agent?.status === 'string') engine.setSessionBusy(agent.id, agent.status === 'running')
+      }
+    } catch {
+      /* registry gone: keep the last known set. */
+    }
+  }
+  const agentTimer = setInterval(syncAgents, 15000)
+  if (typeof agentTimer.unref === 'function') agentTimer.unref()
+  ctx.effect(() => () => clearInterval(agentTimer))
 
   /**
    * Register one HTTP route, keeping the disposer on the owning scope.
@@ -215,7 +317,7 @@ export function apply(ctx, config = {}) {
       method: 'GET',
       handle: async (req, res) => {
         await engine.refresh()
-        sendJson(res, 200, engine.snapshot())
+        sendJson(res, 200, { ...engine.snapshot(), jobs: jobsDiagnostics })
       },
     })
     addRoute(scope, webServer, {
@@ -254,8 +356,8 @@ export function apply(ctx, config = {}) {
     name: 'keep_awake',
     description:
       'Keep this Windows machine (and every background app, such as VMware) running after the laptop lid closes, instead of entering Modern Standby. ' +
-      'Actions: status, enable, disable, toggle, set-mode, watch-add, watch-remove, watch-toggle, set-display, lid-fix, lid-revert, modern-standby-disable, modern-standby-restore, refresh. ' +
-      'Mode `always` holds while enabled; `apps` holds only while a watched process runs; `busy` holds while a DSH session runs a turn. ' +
+      'Actions: status, enable, disable, toggle, set-mode, watch-add, watch-remove, watch-toggle, set-display, set-grace, lid-fix, lid-revert, modern-standby-disable, modern-standby-restore, refresh. ' +
+      'Mode `always` holds while enabled; `apps` holds only while a watched process runs; `busy` holds while a DSH session runs a turn or a background job (a `run_in_background` command, a background subagent) is still running, and keeps holding for a grace window (`graceSeconds`, default 60, 0 disables) after the work ends. ' +
       'The request is system-wide: watching an app only decides when the machine stays awake. ' +
       '`enable` also sets the lid-close action to “do nothing” and `disable` puts the recorded original action back, so a closed lid sleeps again once keep-awake is off. Both transitions are silent: they run through an elevated scheduled task (`DshKeepAwakeLid`) that one `lid-helper-install` call creates with a single administrator prompt, so flipping the switch never asks for permission. Without that task the switch still works and reports `lid:helper-missing` for the lid part. ' +
       'A battery guard stops keep-awake by itself: while running on battery, a charge at or below `batteryFloor` (default 30%, 0 disables it) releases the request and restores the lid action, silently. `set-battery-floor` changes the threshold, `dismiss-auto-stop` clears the notice. ' +
@@ -273,6 +375,7 @@ export function apply(ctx, config = {}) {
             'toggle',
             'set-mode',
             'set-display',
+            'set-grace',
             'watch-add',
             'watch-remove',
             'watch-toggle',
@@ -297,6 +400,12 @@ export function apply(ctx, config = {}) {
           minimum: 0,
           maximum: 100,
           description: 'Battery percentage at or below which keep-awake stops on battery power; 0 turns the guard off (set-battery-floor).',
+        },
+        graceSeconds: {
+          type: 'integer',
+          minimum: 0,
+          maximum: 300,
+          description: 'Seconds to keep holding after DSH work ends, so a background job or a trailing write is not cut off; 0 releases at once (set-grace).',
         },
       },
       required: ['action'],
@@ -323,6 +432,7 @@ export function apply(ctx, config = {}) {
           mode: snapshot.state.mode,
           preventDisplaySleep: snapshot.state.preventDisplaySleep === true,
           batteryFloor: snapshot.state.batteryFloor ?? null,
+          graceMs: snapshot.state.graceMs ?? null,
           watch: snapshot.state.watch.map((entry) => ({ name: entry.name, enabled: entry.enabled === true, running: entry.running === true })),
         },
         hold: {
@@ -330,6 +440,12 @@ export function apply(ctx, config = {}) {
           display: snapshot.hold.display === true,
           since: snapshot.hold.since ?? null,
           reason: snapshot.hold.reason ?? { code: 'unknown' },
+        },
+        busy: {
+          sessions: snapshot.busy.sessions ?? 0,
+          jobs: snapshot.busy.jobs ?? 0,
+          labels: snapshot.busy.labels ?? [],
+          graceRemainingMs: snapshot.busy.graceRemainingMs ?? 0,
         },
         power: { ac: snapshot.power.ac, batteryPercent: snapshot.power.batteryPercent },
         env: {

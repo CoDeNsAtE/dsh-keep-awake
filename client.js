@@ -47,6 +47,9 @@ window.__ModuleLoader__.load({
         'advanced.modernHint': 'The only switch Windows honours on builds that ignore “do nothing”. Takes effect after a reboot; while off, the machine has no sleep at all on this hardware.',
         'advanced.display': 'Also keep the display awake',
         'advanced.displayHint': 'Rarely needed; “do nothing” is ignored on some Modern Standby builds, and this is the fallback.',
+        'advanced.grace': 'Grace after work ends',
+        'advanced.graceHint': 'Keep holding this long after DSH goes idle, so a background job or a trailing file write is not cut off. 0 releases at once.',
+        'advanced.seconds': 's',
         'advanced.helper': 'Silent lid switch',
         'advanced.helperOn': 'ready — lid changes no longer ask for permission',
         'advanced.helperOff': 'not installed — switching asks once for permission',
@@ -61,6 +64,7 @@ window.__ModuleLoader__.load({
         'alert.dismiss': 'Dismiss',
         'notice.helperInstalled': 'Silent lid switch installed.',
         'notice.helperRemoved': 'Silent lid switch removed.',
+        'notice.graceSet': 'Grace period set to {seconds}s.',
         'advanced.diag': 'Show diagnostics',
         'advanced.keeper': 'Power request: {state}',
         'advanced.hideDiag': 'Hide diagnostics',
@@ -90,6 +94,7 @@ window.__ModuleLoader__.load({
         'switch.lidHint': 'Switching on asks once for administrator rights to set “do nothing”; switching off puts your own lid action back.',
         'hero.floor': 'stops under {floor}%',
         'hero.apps': '{count} watched',
+        'hero.grace': 'grace {seconds}s',
         'alert.lidLeftOn': 'The lid-close action is still “do nothing”, so closing the lid no longer sleeps or locks the machine.',
         'alert.lidRestore': 'Restore lid sleep',
         'footer.note': 'Stops when off.',
@@ -139,6 +144,9 @@ window.__ModuleLoader__.load({
         'advanced.modernHint': '只有在那些忽略「不采取任何操作」的版本上才管用的一招。重启后生效；关闭期间，这台机器就没有任何睡眠状态了。',
         'advanced.display': '同时保持屏幕常亮',
         'advanced.displayHint': '一般不需要；部分「现代待机」机型会忽略「不采取任何操作」，这时它是兜底手段。',
+        'advanced.grace': '结束后宽限',
+        'advanced.graceHint': 'DSH 空闲后继续保活这么久，免得后台任务或收尾写文件被掐断。填 0 表示立刻释放。',
+        'advanced.seconds': '秒',
         'advanced.helper': '免确认切换',
         'advanced.helperOn': '已就绪——切换合盖动作不再询问权限',
         'advanced.helperOff': '未安装——切换时会询问一次权限',
@@ -153,6 +161,7 @@ window.__ModuleLoader__.load({
         'alert.dismiss': '知道了',
         'notice.helperInstalled': '免确认切换已安装。',
         'notice.helperRemoved': '免确认切换已移除。',
+        'notice.graceSet': '结束后宽限已设为 {seconds} 秒。',
         'advanced.diag': '查看诊断信息',
         'advanced.keeper': '电源请求能力：{state}',
         'advanced.hideDiag': '收起诊断信息',
@@ -182,6 +191,7 @@ window.__ModuleLoader__.load({
         'switch.lidHint': '打开开关会请求一次管理员权限，把合盖动作设为「不采取任何操作」；关掉开关会把你自己原来的合盖动作放回去。',
         'hero.floor': '低于 {floor}% 自动停止',
         'hero.apps': '监视 {count} 个应用',
+        'hero.grace': '宽限 {seconds} 秒',
         'alert.lidLeftOn': '合盖动作还是「不采取任何操作」，现在合盖不会睡眠、也不会锁屏。',
         'alert.lidRestore': '恢复合盖睡眠',
         'footer.note': '关闭即停止。',
@@ -288,6 +298,7 @@ window.__ModuleLoader__.load({
         diag: null,
         advanced: false,
         floorInput: null,
+        graceInput: null,
       }
       const listeners = new Set()
       return {
@@ -635,6 +646,8 @@ window.__ModuleLoader__.load({
 
         const held = status?.hold
         const holdLine = held?.active && held.since ? t('hold.since', { duration: duration(Date.now() - held.since) }) : t('hold.none')
+        const holdReason = held?.reason || {}
+        const graceSeconds = holdReason.code === 'grace' ? Math.max(1, Math.ceil((holdReason.remainingMs || 0) / 1000)) : 0
 
         const watchRows = (status?.state?.watch || []).map((entry) =>
           h(
@@ -673,10 +686,53 @@ window.__ModuleLoader__.load({
           void run(store, 'set-battery-floor', { batteryFloor: floor }, () => t('battery.fixed', { floor }))
         }
 
+        const graceValue = view.graceInput ?? Math.round((status?.state?.graceMs ?? 60000) / 1000)
+        const commitGrace = () => {
+          const raw = store.get().graceInput
+          if (raw === null || raw === undefined) return
+          store.set({ graceInput: null })
+          const value = Math.round(Number(raw))
+          if (!Number.isFinite(value)) return
+          const seconds = Math.max(0, Math.min(300, value))
+          void run(store, 'set-grace', { graceSeconds: seconds }, () => t('notice.graceSet', { seconds }))
+        }
+
         const advancedBody = view.advanced
           ? h(
               React.Fragment,
               null,
+              h(
+                'div',
+                { className: 'dsh-ka-row' },
+                h(
+                  'div',
+                  { className: 'dsh-ka-row-main' },
+                  h('div', { className: 'dsh-ka-label' }, t('advanced.grace')),
+                ),
+                h(
+                  'div',
+                  { style: { display: 'flex', alignItems: 'center', gap: '4px', flex: 'none' } },
+                  h('input', {
+                    className: 'dsh-ka-input',
+                    type: 'number',
+                    min: 0,
+                    max: 300,
+                    step: 5,
+                    inputMode: 'numeric',
+                    style: { width: '62px', flex: 'none', textAlign: 'right' },
+                    value: graceValue,
+                    disabled: pending,
+                    'aria-label': t('advanced.grace'),
+                    onChange: (event) => store.set({ graceInput: event.target.value }),
+                    onBlur: commitGrace,
+                    onKeyDown: (event) => {
+                      if (event.key === 'Enter') commitGrace()
+                    },
+                  }),
+                  h('span', { className: 'dsh-ka-tag' }, t('advanced.seconds')),
+                ),
+              ),
+              h('div', { className: 'dsh-ka-hint' }, t('advanced.graceHint')),
               h(
                 'div',
                 { className: 'dsh-ka-row' },
@@ -876,7 +932,9 @@ window.__ModuleLoader__.load({
                     { className: 'dsh-ka-hero-sub' },
                     enabled
                       ? supported
-                        ? holdLine
+                        ? graceSeconds > 0
+                          ? t('hero.grace', { seconds: graceSeconds })
+                          : holdLine
                         : t('unsupported')
                       : t('switch.hint'),
                   ),

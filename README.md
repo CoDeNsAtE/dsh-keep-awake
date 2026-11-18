@@ -32,7 +32,13 @@ plugin has no dependencies and reaches `koffi` from the Harness installation for
   also drops the request if the process dies, so the machine can never be left permanently awake
   by a crashed host.
 - Offers three hold policies: `always`, `apps` (hold only while a watched process runs) and `busy`
-  (hold only while a DSH session is running a turn).
+  (hold while a DSH session runs a turn **or** a background job is still running — a
+  `run_in_background` command, a background subagent, a workflow). Job state comes from the jobs
+  registry, asked once per session, so a build that outlives its turn still counts as work.
+- **Grace after work ends**: when the last turn and the last background job are done, `busy` keeps
+  holding for `graceSeconds` (default 60, range 0–300, `Advanced → Grace after work ends`) so a
+  trailing file write or a job that settles a moment later is not cut off. The window shows
+  `grace Ns` while it runs; `0` releases at once.
 - The lid-close action follows the switch: switching **on** sets it to “do nothing” for AC and
   battery (the original values are saved), switching **off** puts those original values back, so a
   closed lid sleeps and locks the machine again. Both directions are **silent**: they run through the
@@ -88,6 +94,6 @@ Everything the window can do is also available to the agent as the `keep_awake` 
 ## State
 
 The persisted wish (switch, policy, watched names, saved lid actions, saved Modern Standby values,
-battery floor, last automatic stop) lives in `<DSH_HOME>/keep-awake/state.json`; the silent helper
+battery floor, grace window, last automatic stop) lives in `<DSH_HOME>/keep-awake/state.json`; the silent helper
 keeps `lid-apply.ps1`, `lid-request.json` and `lid-result.json` next to it; a heartbeat trace used
 for verification lives in `<DSH_HOME>/keep-awake/heartbeat.log`.
