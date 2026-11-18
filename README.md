@@ -39,6 +39,10 @@ plugin has no dependencies and reaches `koffi` from the Harness installation for
   holding for `graceSeconds` (default 60, range 0–300, `Advanced → Grace after work ends`) so a
   trailing file write or a job that settles a moment later is not cut off. The window shows
   `grace Ns` while it runs; `0` releases at once.
+- In `busy` and `apps` modes the lid-close action follows **the hold**, not only the switch: while a
+  policy is actually holding (a turn runs, a watched app runs) it is “do nothing”; once the policy
+  goes idle — the turn ended and the grace window expired, VMware exited — it is put back to the
+  original action, silently, so a closed lid sleeps again even though the switch is still on.
 - The lid-close action follows the switch: switching **on** sets it to “do nothing” for AC and
   battery (the original values are saved), switching **off** puts those original values back, so a
   closed lid sleeps and locks the machine again. Both directions are **silent**: they run through the
