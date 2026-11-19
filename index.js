@@ -97,6 +97,18 @@ function lidWord(value) {
 }
 
 /**
+ * "Sleep after" seconds as the agent reads them (0 = never).
+ * @param {unknown} value
+ * @returns {string}
+ */
+function sleepWord(value) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return '从不'
+  if (value % 3600 === 0) return `${value / 3600} 小时`
+  if (value % 60 === 0) return `${value / 60} 分钟`
+  return `${value} 秒`
+}
+
+/**
  * @param {number} ms
  * @returns {string}
  */
@@ -144,6 +156,14 @@ function summarize(snapshot) {
     const dc = lidWord(env.lidDc)
     parts.push(`合盖动作: ${ac === dc ? ac : `交流 ${ac} / 电池 ${dc}`}`)
     if (env.lidNeedsRestore) parts.push('注意: 合盖动作仍是「不采取任何操作」，合盖不会睡眠（点恢复合盖睡眠）')
+    const sleepAc = env.standbyAc
+    const sleepDc = env.standbyDc
+    if (state.enabled && sleepAc === 0 && sleepDc === 0) parts.push('睡眠超时: 保活期间已设为「从不」（电池上 Windows 会在超时后终止电源请求）')
+    else if (sleepAc !== null && sleepDc !== null) {
+      parts.push(`睡眠超时: 交流 ${sleepWord(sleepAc)} / 电池 ${sleepWord(sleepDc)}`)
+    }
+    if (env.sleepNeedsRestore) parts.push('注意: 睡眠超时仍是「从不」，空闲后机器不会自动睡眠（点恢复睡眠超时）')
+    if (snapshot.env?.holdPlan?.displayHeld) parts.push('屏幕: 电池上保活时保持点亮（屏幕一关 Windows 就进现代待机）')
     if (env.pendingReboot) parts.push('现代待机: 已禁用，等重启生效')
     else if (env.modernStandbyDisabled) parts.push('现代待机: 已禁用')
     else if (env.modernStandby) parts.push('现代待机: 开启（合盖会被强制待机）')
@@ -356,12 +376,12 @@ export function apply(ctx, config = {}) {
     name: 'keep_awake',
     description:
       'Keep this Windows machine (and every background app, such as VMware) running after the laptop lid closes, instead of entering Modern Standby. ' +
-      'Actions: status, enable, disable, toggle, set-mode, watch-add, watch-remove, watch-toggle, set-display, set-grace, lid-fix, lid-revert, modern-standby-disable, modern-standby-restore, refresh. ' +
+      'Actions: status, enable, disable, toggle, set-mode, watch-add, watch-remove, watch-toggle, set-display, set-grace, lid-fix, lid-revert, sleep-revert, modern-standby-disable, modern-standby-restore, refresh. ' +
       'Mode `always` holds while enabled; `apps` holds only while a watched process runs; `busy` holds while a DSH session runs a turn or a background job (a `run_in_background` command, a background subagent) is still running, and keeps holding for a grace window (`graceSeconds`, default 60, 0 disables) after the work ends. ' +
       'The request is system-wide: watching an app only decides when the machine stays awake. ' +
-      '`enable` also sets the lid-close action to “do nothing” and `disable` puts the recorded original action back, so a closed lid sleeps again once keep-awake is off. Both transitions are silent: they run through an elevated scheduled task (`DshKeepAwakeLid`) that one `lid-helper-install` call creates with a single administrator prompt, so flipping the switch never asks for permission. Without that task the switch still works and reports `lid:helper-missing` for the lid part. ' +
-      'A battery guard stops keep-awake by itself: while running on battery, a charge at or below `batteryFloor` (default 30%, 0 disables it) releases the request and restores the lid action, silently. `set-battery-floor` changes the threshold, `dismiss-auto-stop` clears the notice. ' +
-      '`lid-fix` rewrites the lid-close power action and raises one Windows administrator prompt. ' +
+      'Two machine-wide power-plan settings follow the hold: the lid-close action is set to “do nothing”, and the “sleep after” timeout is set to “never”. The second one matters because on Modern Standby hardware running on battery Windows terminates system power requests five minutes after the sleep timeout expires, so a finite sleep timeout would put the machine to sleep anyway. `disable` (or an idle `apps`/`busy` policy) puts the recorded original values back. All of it is written by `powercfg` from the Host process, which needs no prompt on most builds and keeps working on battery; a locked-down machine falls back to the elevated helper task (`DshKeepAwakeLid`), then to one administrator prompt. ' +
+      'A battery guard stops keep-awake by itself: while running on battery, a charge at or below `batteryFloor` (default 30%, 0 disables it) releases the request and restores both settings, silently. `set-battery-floor` changes the threshold, `dismiss-auto-stop` clears the notice. ' +
+      '`lid-fix` and `sleep-revert` write the lid and sleep settings by hand when something was left behind. ' +
       '`modern-standby-disable` switches Modern Standby off in the registry so a closed lid can no longer suspend the machine; it also raises one administrator prompt and needs a reboot, and `modern-standby-restore` puts the recorded values back.',
     parameters: {
       type: 'object',
@@ -381,6 +401,7 @@ export function apply(ctx, config = {}) {
             'watch-toggle',
             'lid-fix',
             'lid-revert',
+            'sleep-revert',
             'lid-helper-install',
             'lid-helper-remove',
             'set-battery-floor',
@@ -452,10 +473,17 @@ export function apply(ctx, config = {}) {
           available: snapshot.env.available === true,
           lidAc: snapshot.env.lidAc ?? null,
           lidDc: snapshot.env.lidDc ?? null,
+          standbyAc: snapshot.env.standbyAc ?? null,
+          standbyDc: snapshot.env.standbyDc ?? null,
+          videoAc: snapshot.env.videoAc ?? null,
+          videoDc: snapshot.env.videoDc ?? null,
+          displayHeld: snapshot.env.holdPlan?.displayHeld === true,
           modernStandby: snapshot.env.modernStandby === true,
           modernStandbyDisabled: snapshot.env.modernStandbyDisabled === true,
           pendingReboot: snapshot.env.pendingReboot === true,
           lidNeedsRestore: snapshot.env.lidNeedsRestore === true,
+          sleepNeedsRestore: snapshot.env.sleepNeedsRestore === true,
+          videoNeedsRestore: snapshot.env.videoNeedsRestore === true,
           lidHelper: snapshot.env.lidHelper === true,
         },
         autoStop: snapshot.autoStop
@@ -465,10 +493,13 @@ export function apply(ctx, config = {}) {
               floor: snapshot.autoStop.floor ?? null,
               lidRestored: snapshot.autoStop.lidRestored === true,
               lidError: snapshot.autoStop.lidError ?? null,
+              sleepRestored: snapshot.autoStop.sleepRestored === true,
+              sleepError: snapshot.autoStop.sleepError ?? null,
             }
           : null,
         rebootRequired: result.rebootRequired === true,
         lid: result.lid ?? null,
+        sleep: result.sleep ?? null,
         lastError: snapshot.lastError ?? null,
       }
     },

@@ -36,8 +36,17 @@ window.__ModuleLoader__.load({
         'advanced': 'Advanced',
         'advanced.lid': 'Lid-close action',
         'advanced.lidValue': 'AC {ac} · battery {dc}',
-        'advanced.fix': 'Set to “do nothing” (admin)',
+        'advanced.fix': 'Set to “do nothing”',
         'advanced.revert': 'Restore previous action',
+        'advanced.sleep': 'Sleep after',
+        'advanced.sleepValue': 'AC {ac} · battery {dc}',
+        'advanced.sleepNever': 'never',
+        'advanced.sleepHeld': 'set to “never” while keeping awake — Windows ends power requests 5 min after a battery sleep timeout',
+        'advanced.sleepHint': 'On Modern Standby hardware running on battery, Windows terminates every power request 5 minutes after the sleep timeout expires, so a finite value puts the machine to sleep even while keep-awake holds. The plugin therefore writes “never” while it holds, and puts your own values back when it stops.',
+        'advanced.sleepRevert': 'Restore my sleep timeout',
+        'advanced.displayBattery': 'On battery the display also stays on: Modern Standby starts the moment it turns off, and a power request can only delay that by five minutes.',
+        'advanced.minutes': 'min',
+        'advanced.hours': 'h',
         'advanced.modern': 'Modern Standby',
         'advanced.modernOn': 'on — a closed lid forces standby, whatever the action above says',
         'advanced.modernOff': 'off — a closed lid no longer sleeps the machine',
@@ -85,18 +94,21 @@ window.__ModuleLoader__.load({
         'notice.removed': 'Removed {name}',
         'notice.lidFixed': 'Lid-close action is now “do nothing” on AC and battery.',
         'notice.lidReverted': 'Lid-close action restored.',
+        'notice.sleepReverted': 'Sleep timeout restored.',
         'notice.modernFixed': 'Modern Standby is off in the registry — reboot to make it real.',
         'notice.modernRestored': 'Modern Standby setting restored — reboot to make it real.',
         'notice.enabled': 'Keeping awake.',
         'notice.disabled': 'Power request released.',
         'notice.lidDenied': 'Administrator permission was cancelled — the lid-close action is unchanged.',
         'notice.lidHelperNeeded': 'Silent lid switch is not installed yet — open Advanced and install it once; switching stays instant afterwards.',
-        'switch.lidHint': 'Switching on asks once for administrator rights to set “do nothing”; switching off puts your own lid action back.',
+        'switch.lidHint': 'Switching on sets “do nothing” for lid close and “never” for the sleep timeout, so Windows cannot put the machine to sleep under the request; switching off puts your own values back.',
         'hero.floor': 'stops under {floor}%',
         'hero.apps': '{count} watched',
         'hero.grace': 'grace {seconds}s',
         'alert.lidLeftOn': 'The lid-close action is still “do nothing”, so closing the lid no longer sleeps or locks the machine.',
         'alert.lidRestore': 'Restore lid sleep',
+        'alert.sleepLeftOn': 'The sleep timeout is still “never”, so the machine will not sleep when idle.',
+        'alert.sleepRestore': 'Restore sleep timeout',
         'footer.note': 'Stops when off.',
         'close': 'Close',
         'minimize': 'Minimize',
@@ -133,8 +145,17 @@ window.__ModuleLoader__.load({
         'advanced': '高级',
         'advanced.lid': '合盖动作',
         'advanced.lidValue': '交流 {ac} · 电池 {dc}',
-        'advanced.fix': '改为「不采取任何操作」（管理员）',
+        'advanced.fix': '改为「不采取任何操作」',
         'advanced.revert': '恢复原来的合盖动作',
+        'advanced.sleep': '睡眠超时',
+        'advanced.sleepValue': '交流 {ac} · 电池 {dc}',
+        'advanced.sleepNever': '从不',
+        'advanced.sleepHeld': '保活期间已设为「从不」——电池上 Windows 会在睡眠超时后 5 分钟终止电源请求',
+        'advanced.sleepHint': '在这类「现代待机」机器上，用电池时 Windows 会在睡眠超时到期 5 分钟后终止所有电源请求，所以只要睡眠超时是个具体时间，保活也拦不住它入睡。插件因此在保活期间把睡眠超时写成「从不」，停止保活后再把你原来的值放回去。',
+        'advanced.sleepRevert': '恢复我的睡眠超时',
+        'advanced.displayBattery': '用电池保活时屏幕也会保持点亮：屏幕一关，Windows 就进入现代待机，电源请求最多只能再拖五分钟。',
+        'advanced.minutes': '分钟',
+        'advanced.hours': '小时',
         'advanced.modern': '现代待机',
         'advanced.modernOn': '开启——合盖会被强制进入待机，上面的合盖动作说了也不算',
         'advanced.modernOff': '已关闭——合盖不会再让机器睡眠',
@@ -182,18 +203,21 @@ window.__ModuleLoader__.load({
         'notice.removed': '已移除 {name}',
         'notice.lidFixed': '合盖动作已改为「不采取任何操作」（交流与电池）。',
         'notice.lidReverted': '合盖动作已恢复。',
+        'notice.sleepReverted': '睡眠超时已恢复。',
         'notice.modernFixed': '注册表里的现代待机已关闭——重启后生效。',
         'notice.modernRestored': '现代待机设置已恢复——重启后生效。',
         'notice.enabled': '已开始保活。',
         'notice.disabled': '电源请求已释放。',
         'notice.lidDenied': '管理员授权被取消——合盖动作没有改动。',
         'notice.lidHelperNeeded': '还没安装免确认切换——请在「高级」里安装一次，之后切换都是瞬间完成。',
-        'switch.lidHint': '打开开关会请求一次管理员权限，把合盖动作设为「不采取任何操作」；关掉开关会把你自己原来的合盖动作放回去。',
+        'switch.lidHint': '打开开关会把合盖动作设为「不采取任何操作」、把睡眠超时设为「从不」，这样 Windows 在你保活时就不能把机器睡下去；关掉开关会把你原来的值放回去。',
         'hero.floor': '低于 {floor}% 自动停止',
         'hero.apps': '监视 {count} 个应用',
         'hero.grace': '宽限 {seconds} 秒',
         'alert.lidLeftOn': '合盖动作还是「不采取任何操作」，现在合盖不会睡眠、也不会锁屏。',
         'alert.lidRestore': '恢复合盖睡眠',
+        'alert.sleepLeftOn': '睡眠超时还是「从不」，机器空闲后不会自动睡眠。',
+        'alert.sleepRestore': '恢复睡眠超时',
         'footer.note': '关闭即停止。',
         'close': '关闭',
         'minimize': '收起',
@@ -567,6 +591,20 @@ window.__ModuleLoader__.load({
         return t(`lid.${value}`)
       }
 
+      /**
+       * "Sleep after" index in words: 0 means "never", anything else a duration.
+       * @param {number|null|undefined} value - seconds.
+       * @returns {string}
+       */
+      function sleepText(value) {
+        if (value === null || value === undefined) return t('lid.default')
+        if (!Number.isFinite(value) || value <= 0) return t('advanced.sleepNever')
+        const seconds = Math.round(value)
+        if (seconds % 3600 === 0) return `${seconds / 3600} ${t('advanced.hours')}`
+        if (seconds % 60 === 0) return `${seconds / 60} ${t('advanced.minutes')}`
+        return `${seconds} ${t('advanced.seconds')}`
+      }
+
       function StartWindow() {
         const view = useStore(store)
         const status = view.status
@@ -604,6 +642,7 @@ window.__ModuleLoader__.load({
         const mode = status?.state?.mode || 'always'
         const enabled = status?.state?.enabled === true
         const supported = status ? status.supported === true : true
+        const holding = enabled && status?.hold?.active === true
 
         const startDrag = (event) => {
           if (event.button !== 0) return
@@ -769,6 +808,47 @@ window.__ModuleLoader__.load({
                       onClick: () => void run(store, 'lid-revert', {}, () => t('notice.lidReverted')),
                     },
                     t('advanced.revert'),
+                  )
+                : null,
+              h(
+                'div',
+                { className: 'dsh-ka-row' },
+                h(
+                  'div',
+                  { className: 'dsh-ka-row-main' },
+                  h('div', { className: 'dsh-ka-label' }, t('advanced.sleep')),
+                  h(
+                    'div',
+                    { className: 'dsh-ka-hint' },
+                    t('advanced.sleepValue', {
+                      ac: sleepText(status?.env?.standbyAc),
+                      dc: sleepText(status?.env?.standbyDc),
+                    }),
+                  ),
+                ),
+                holding && status?.env?.standbyAc === 0 && status?.env?.standbyDc === 0
+                  ? h('span', { className: 'dsh-ka-tag' }, t('advanced.sleepNever'))
+                  : null,
+              ),
+              h(
+                'div',
+                { className: 'dsh-ka-hint' },
+                holding && status?.env?.standbyAc === 0 && status?.env?.standbyDc === 0
+                  ? t('advanced.sleepHeld')
+                  : t('advanced.sleepHint'),
+                status?.env?.holdPlan?.displayHeld ? ` ${t('advanced.displayBattery')}` : '',
+              ),
+              status?.state?.sleepOriginal
+                ? h(
+                    'button',
+                    {
+                      type: 'button',
+                      className: 'dsh-ka-btn dsh-ka-btn-ghost',
+                      style: { alignSelf: 'flex-start' },
+                      disabled: pending,
+                      onClick: () => void run(store, 'sleep-revert', {}, () => t('notice.sleepReverted')),
+                    },
+                    t('advanced.sleepRevert'),
                   )
                 : null,
               h(
@@ -953,9 +1033,14 @@ window.__ModuleLoader__.load({
                       })
                     }
                     void run(store, next ? 'enable' : 'disable', {}, (result) => {
-                      if (result?.lid && result.lid.applied === false) {
-                        const reason = String(result.lid.error || '')
-                        if (reason.includes('helper-missing')) return t('notice.lidHelperNeeded')
+                      // The lid and the sleep timeout are separate writes; either
+                      // one can be refused on a locked-down machine.
+                      for (const part of [result?.lid, result?.sleep]) {
+                        if (!part || part.applied !== false) continue
+                        const reason = String(part.error || '')
+                        if (reason.includes('helper-missing') || reason.includes('needs-admin')) {
+                          return t('notice.lidHelperNeeded')
+                        }
                         return t('notice.lidDenied')
                       }
                       return t(next ? 'notice.enabled' : 'notice.disabled')
@@ -1022,6 +1107,27 @@ window.__ModuleLoader__.load({
                   ),
                 )
               : null,
+            status?.env?.sleepNeedsRestore || status?.env?.videoNeedsRestore
+              ? h(
+                  'div',
+                  { className: 'dsh-ka-alert' },
+                  h('div', null, t('alert.sleepLeftOn')),
+                  h(
+                    'div',
+                    { style: { display: 'flex', justifyContent: 'flex-end' } },
+                    h(
+                      'button',
+                      {
+                        type: 'button',
+                        className: 'dsh-ka-btn',
+                        disabled: pending,
+                        onClick: () => void run(store, 'sleep-revert', {}, () => t('notice.sleepReverted')),
+                      },
+                      t('alert.sleepRestore'),
+                    ),
+                  ),
+                )
+              : null,
             status?.autoStop
               ? h(
                   'div',
@@ -1041,6 +1147,18 @@ window.__ModuleLoader__.load({
                             onClick: () => void run(store, 'lid-revert', {}, () => t('notice.lidReverted')),
                           },
                           t('alert.lidRestore'),
+                        )
+                      : null,
+                    status.autoStop.sleepRestored === false
+                      ? h(
+                          'button',
+                          {
+                            type: 'button',
+                            className: 'dsh-ka-btn',
+                            disabled: pending,
+                            onClick: () => void run(store, 'sleep-revert', {}, () => t('notice.sleepReverted')),
+                          },
+                          t('alert.sleepRestore'),
                         )
                       : null,
                     h(

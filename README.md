@@ -45,18 +45,23 @@ plugin has no dependencies and reaches `koffi` from the Harness installation for
   original action, silently, so a closed lid sleeps again even though the switch is still on.
 - The lid-close action follows the switch: switching **on** sets it to “do nothing” for AC and
   battery (the original values are saved), switching **off** puts those original values back, so a
-  closed lid sleeps and locks the machine again. Both directions are **silent**: they run through the
-  elevated task below, so flipping the switch never opens a UAC prompt. One switch takes about a
-  second end to end, and the window flips its switch instantly instead of waiting.
+  closed lid sleeps and locks the machine again. Both directions are **silent** and ask for no
+  permission: the plugin writes the power-scheme indexes with `powercfg` from the Host process and
+  verifies them by reading the registry back. A machine that refuses the write falls back to the
+  elevated task below, and only that fallback can ever show a UAC prompt.
+- **The sleep timeout follows the hold too**: while keeping awake, `Sleep after` becomes *never* for
+  AC and battery, and the recorded values come back when it stops. This is not cosmetic — see
+  [Why a finite sleep timeout still slept the machine](#why-a-finite-sleep-timeout-still-slept-the-machine).
 - **Battery guard**: on battery power, once the charge drops to `batteryFloor` (default 30 %) the
-  plugin stops keep-awake by itself and puts the lid action back to sleep. That automatic stop never
-  prompts — see *Silent lid switch* below. `0` in the battery field turns the guard off.
-- **Advanced → Silent lid switch** installs one elevated scheduled task (`DshKeepAwakeLid`). Creating
-  it is the only administrator prompt this plugin ever needs them for; afterwards every lid-action
-  change is requested through a small JSON file plus `schtasks /run`, and the task answers with a
-  result file. The advanced row shows whether it is ready and can install or remove it. Without it,
-  the switch still works but the lid part reports `lid:helper-missing` and the window offers the
-  one-time setup.
+  plugin stops keep-awake by itself and puts the lid action and the sleep timeout back. That
+  automatic stop never prompts — every write it needs is prompt-free. `0` in the battery field turns
+  the guard off.
+- **Advanced → Silent lid switch** installs one elevated scheduled task (`DshKeepAwakeLid`). On most
+  builds it is not needed at all, because `powercfg` writes the scheme directly; it is the fallback
+  for a machine where that write needs administrator rights. Creating it is the only time this
+  plugin asks for permission; afterwards every change is requested through a small JSON file plus
+  `schtasks /run`, and the task answers with a result file that names both the lid action and the
+  sleep timeout. The advanced row shows whether it is ready and can install or remove it.
 - **Advanced → Lid-close action** keeps a manual override of the same two operations, and
   **Advanced → Modern Standby** switches Modern Standby off in the registry
   (`PlatformAoAcOverride`, `CsEnabled`, `ModernSleep\EnabledActions`, `AwayModeEnabled`). That is
@@ -70,6 +75,31 @@ power request held, closing the lid still produced `Kernel-Power` event 506 with
 suspended the whole machine for the time the lid stayed shut. `SetThreadExecutionState` cannot veto
 a lid-triggered transition — so the lid-close action is what keeps *the lid* from sleeping the
 machine, and the request is what keeps *Windows* from idling out on top of that.
+
+## Why a finite sleep timeout still slept the machine
+
+Reported behaviour: with `Sleep after` set to *never* keep-awake worked, with any duration the
+machine slept right after that duration. That is documented Windows behaviour, not a flaw in the
+power request:
+
+> On Modern Standby systems on DC power, system and execution required power requests are terminated
+> 5 minutes after the system sleep timeout has expired.
+> — [PowerSetRequest, Microsoft Learn](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-powersetrequest)
+
+On battery, a finite “sleep after” value of 10 minutes therefore buys a keep-awake app about 15
+minutes; then Windows ends the request and the machine sleeps. Holding longer does not help — the
+condition has to disappear. While the machine is held, the plugin writes `0` (*never*) to
+`STANDBYIDLE` for AC and battery, which is exactly the configuration people reach for by hand, and
+restores the recorded values the moment the hold ends. Only values the plugin wrote are reverted, so
+a value you change by hand in the meantime survives.
+
+There is a second trigger on battery: modern standby *starts* when the display turns off, and its
+first phase only lets power requests block the transition “for up to 5 minutes on DC power”
+([Prepare software for modern standby](https://learn.microsoft.com/en-us/windows-hardware/design/device-experiences/prepare-software-for-modern-standby)).
+A dark screen therefore beats the request on battery. So while it holds **on battery**, the plugin
+also borrows the battery display timeout (`VIDEOIDLE` → *never*), and gives it back when the hold
+ends or the charger is plugged in. On AC nothing is touched and the screen may turn off normally —
+there the request blocks that phase indefinitely.
 
 ## Where to open it
 
@@ -90,14 +120,16 @@ Everything the window can do is also available to the agent as the `keep_awake` 
   sleep state at all**: Start → Sleep does nothing, and the only power saving left is
   screen-off/shutdown. That is the price of a working closed lid here; the restore button puts the
   original registry values back.
-- If the Harness exits while the switch was on, the lid action can stay at “do nothing” and the
-  guard can no longer run. Windows cannot raise an administrator prompt during shutdown. The window
-  then opens with a warning and a **Restore lid sleep** button.
+- If the Harness is killed (rather than switched off) the lid action and the sleep timeout can stay
+  at their keep-awake values. The window then opens with a warning and one-click restores for both;
+  starting the Harness again while the switch is off heals them automatically. Windows cannot raise
+  an administrator prompt during shutdown, which is why the heal happens on the next start.
 - The Harness host must be running. Closing the Harness releases the request.
 
 ## State
 
-The persisted wish (switch, policy, watched names, saved lid actions, saved Modern Standby values,
-battery floor, grace window, last automatic stop) lives in `<DSH_HOME>/keep-awake/state.json`; the silent helper
-keeps `lid-apply.ps1`, `lid-request.json` and `lid-result.json` next to it; a heartbeat trace used
-for verification lives in `<DSH_HOME>/keep-awake/heartbeat.log`.
+The persisted wish (switch, policy, watched names, saved lid actions, saved sleep timeouts, saved
+Modern Standby values, battery floor, grace window, last automatic stop) lives in
+`<DSH_HOME>/keep-awake/state.json`; the silent helper keeps `lid-apply.ps1`, `lid-request.json` and
+`lid-result.json` next to it; a heartbeat trace used for verification lives in
+`<DSH_HOME>/keep-awake/heartbeat.log`.
