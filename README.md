@@ -130,9 +130,12 @@ Everything the plugin borrows is put back, and the moments it happens are:
   restores the same settings **synchronously** with `powercfg` + `reg.exe`, so closing or removing the
   plugin cannot leave a machine that never sleeps. If a setting could not be written it is remembered,
   and the next start with the switch off heals it.
-- **Advanced → Leave no trace** — the same restore, plus: the silent helper task (`DshKeepAwakeLid`)
-  and its script/request/result files are removed, and Modern Standby is put back if this plugin
-  switched it off. Run it before uninstalling the bundle if you also want the scheduled task gone.
+- **Advanced → Leave no trace** — writes the **default power profile** (plugged in: never blank the
+  screen, never sleep; on battery: three minutes for both — the Windows recommendation), then removes
+  the silent helper task (`DshKeepAwakeLid`) and its script/request/result files, and restores Modern
+  Standby if this plugin switched it off. Run it before uninstalling the bundle if you also want the
+  scheduled task gone. **Advanced → Default power profile** writes the same profile without the
+  clean-up (the helper task stays).
 - If the Host is killed (no disposer runs), the settings stay borrowed until the next start: the window
   then warns and offers one-click restores, or switching the plugin back on re-asserts them.
 
