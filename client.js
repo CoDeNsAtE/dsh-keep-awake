@@ -64,6 +64,11 @@ window.__ModuleLoader__.load({
         'advanced.helperOff': 'not installed — switching asks once for permission',
         'advanced.helperInstall': 'Install (admin)',
         'advanced.helperRemove': 'Remove',
+        'advanced.cleanup': 'Leave no trace',
+        'advanced.cleanupHint': 'Switches keep-awake off, puts the lid action and both timeouts back, removes the silent helper task and its files, and restores Modern Standby if this plugin turned it off. Do this before uninstalling.',
+        'advanced.cleanupAction': 'Restore & clean up',
+        'notice.cleaned': 'All power settings restored; the silent helper was removed.',
+        'notice.cleanedPartial': 'Settings restored, but the helper task could not be removed without permission.',
         'battery.label': 'Battery guard',
         'battery.hint': 'On battery power, keep-awake stops at or below this level and the lid action returns to sleep — without asking for permission.',
         'battery.min': '0 turns it off.',
@@ -178,6 +183,11 @@ window.__ModuleLoader__.load({
         'advanced.helperOff': '未安装——切换时会询问一次权限',
         'advanced.helperInstall': '安装（管理员）',
         'advanced.helperRemove': '移除',
+        'advanced.cleanup': '彻底还原',
+        'advanced.cleanupHint': '关掉保活，把合盖动作、睡眠超时、电池屏幕超时都放回原值，移除免确认切换的计划任务和它的文件，如果插件关过现代待机也一并恢复。卸载前点一下，机器就跟没装过一样。',
+        'advanced.cleanupAction': '还原并清理',
+        'notice.cleaned': '电源设置已全部还原，免确认切换已移除。',
+        'notice.cleanedPartial': '电源设置已还原，但免确认切换的计划任务没权限删除。',
         'battery.label': '电池保护',
         'battery.hint': '使用电池时，电量降到这个值以下就自动停止保活，并把合盖动作恢复成睡眠——不会再弹管理员确认。',
         'battery.min': '填 0 表示关闭。',
@@ -992,6 +1002,30 @@ window.__ModuleLoader__.load({
               view.diag
                 ? h('pre', { className: 'dsh-ka-pre' }, JSON.stringify(view.diag, null, 2))
                 : null,
+              h(
+                'div',
+                { className: 'dsh-ka-row' },
+                h(
+                  'div',
+                  { className: 'dsh-ka-row-main' },
+                  h('div', { className: 'dsh-ka-label' }, t('advanced.cleanup')),
+                  h('div', { className: 'dsh-ka-hint' }, t('advanced.cleanupHint')),
+                ),
+                h(
+                  'button',
+                  {
+                    type: 'button',
+                    className: 'dsh-ka-btn',
+                    disabled: pending,
+                    title: t('advanced.cleanupHint'),
+                    onClick: () =>
+                      void run(store, 'restore-defaults', {}, (result) =>
+                        result?.helper && result.helper.ok === false ? t('notice.cleanedPartial') : t('notice.cleaned'),
+                      ),
+                  },
+                  t('advanced.cleanupAction'),
+                ),
+              ),
             )
           : null
 

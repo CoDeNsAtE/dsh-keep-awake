@@ -120,6 +120,22 @@ an automatic escalation again. The self-check never acts while the policy is idl
 events from before the current hold, and remembers the last event it saw so a repeated read cannot
 escalate twice.
 
+## Leaving the machine exactly as it was found
+
+Everything the plugin borrows is put back, and the moments it happens are:
+
+- **Switch off** — the power request is released and the lid action, the sleep timeout and the battery
+  display timeout go back to their recorded values (values you changed by hand in the meantime win).
+- **Plugin disabled or uninstalled** — `dispose()` runs before the fiber (or the process) goes away and
+  restores the same settings **synchronously** with `powercfg` + `reg.exe`, so closing or removing the
+  plugin cannot leave a machine that never sleeps. If a setting could not be written it is remembered,
+  and the next start with the switch off heals it.
+- **Advanced → Leave no trace** — the same restore, plus: the silent helper task (`DshKeepAwakeLid`)
+  and its script/request/result files are removed, and Modern Standby is put back if this plugin
+  switched it off. Run it before uninstalling the bundle if you also want the scheduled task gone.
+- If the Host is killed (no disposer runs), the settings stay borrowed until the next start: the window
+  then warns and offers one-click restores, or switching the plugin back on re-asserts them.
+
 ## Where to open it
 
 The round button directly above **Settings** at the bottom of the left sidebar opens a small

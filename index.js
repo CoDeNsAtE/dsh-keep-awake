@@ -390,6 +390,7 @@ export function apply(ctx, config = {}) {
       'A battery guard stops keep-awake by itself: while running on battery, a charge at or below `batteryFloor` (default 30%, 0 disables it) releases the request and restores both settings, silently. `set-battery-floor` changes the threshold, `dismiss-auto-stop` clears the notice. ' +
       '`lid-fix` and `sleep-revert` write the lid and sleep settings by hand when something was left behind. ' +
       'A self-check reads the Kernel-Power 506 events once a minute while holding. If Windows entered Modern Standby during the hold, the request is escalated from system-only (0x80000001) to system + display (0x80000003), silently, and the reason is reported in `escalation`; a second event (or a lid-triggered one, which a display request cannot fix) reports `level: 3` and recommends `modern-standby-disable`. `reset-escalation` returns to the plain request. ' +
+      'Closing, disabling or uninstalling the plugin restores every borrowed power setting synchronously (lid action, sleep timeout, battery display timeout), so nothing stays behind; `restore-defaults` does the same on demand, also switches the switch off, removes the silent helper task and its files, and restores Modern Standby if this plugin switched it off. ' +
       '`modern-standby-disable` switches Modern Standby off in the registry so a closed lid can no longer suspend the machine; it also raises one administrator prompt and needs a reboot, and `modern-standby-restore` puts the recorded values back.',
     parameters: {
       type: 'object',
@@ -418,6 +419,7 @@ export function apply(ctx, config = {}) {
             'modern-standby-restore',
             'refresh',
             'reset-escalation',
+            'restore-defaults',
           ],
           description: 'Operation to perform.',
         },
@@ -510,6 +512,8 @@ export function apply(ctx, config = {}) {
         lid: result.lid ?? null,
         sleep: result.sleep ?? null,
         escalation: snapshot.escalation ?? null,
+        restored: Array.isArray(result.restored) ? result.restored : null,
+        helper: result.helper ?? null,
         lastError: snapshot.lastError ?? null,
       }
     },
