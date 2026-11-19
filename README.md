@@ -101,6 +101,25 @@ also borrows the battery display timeout (`VIDEOIDLE` → *never*), and gives it
 ends or the charger is plugged in. On AC nothing is touched and the screen may turn off normally —
 there the request blocks that phase indefinitely.
 
+## Self-check and the last-resort ladder
+
+Every time it holds, the plugin reads the System log for `Kernel-Power` 506 (“entering Modern
+Standby”) events once a minute. An event timestamped inside the current hold means the request was
+not enough, so the hold itself is upgraded:
+
+1. **System request only** (`ES_CONTINUOUS | ES_SYSTEM_REQUIRED`, `0x80000001`) — the normal state.
+2. **System + display** (`0x80000003`) — the silent, instant upgrade: the screen stays on, so Modern
+   Standby cannot begin at all. The window explains what happened, when, and the power-manager reason
+   code (12 = idle timeout, 15 = lid).
+3. **Recommendation** — a second event after that upgrade, or one caused by the lid (a display
+   request cannot fix a lid trigger), means this machine needs Modern Standby gone: the window then
+   offers **Switch Modern Standby off** (one administrator prompt, reboot; reversible).
+
+`Advanced → Also keep the display awake` is the same lever by hand, and switching it off there drops
+an automatic escalation again. The self-check never acts while the policy is idle, never looks at
+events from before the current hold, and remembers the last event it saw so a repeated read cannot
+escalate twice.
+
 ## Where to open it
 
 The round button directly above **Settings** at the bottom of the left sidebar opens a small

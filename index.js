@@ -169,6 +169,13 @@ function summarize(snapshot) {
     else if (env.modernStandby) parts.push('现代待机: 开启（合盖会被强制待机）')
   }
   if (snapshot.hold.reason?.code === 'unsupported') parts.push('此机器无法申请电源请求')
+  const esc = snapshot.escalation
+  if (esc && typeof esc.level === 'number' && esc.level >= 2) {
+    const when = typeof esc.eventAt === 'number' ? new Date(esc.eventAt).toLocaleTimeString('zh-CN', { hour12: false }) : '?'
+    const why = esc.reasonText || '未知原因'
+    if (esc.level === 3) parts.push(`自检: ${when} 保活时仍进过待机（${why}），建议关闭现代待机`)
+    else parts.push(`自检: ${when} 保活时进过待机（${why}），已把电源请求升级为「系统+显示」`)
+  }
   const stop = snapshot.autoStop
   if (stop && typeof stop === 'object') {
     const how = stop.lidRestored ? '合盖睡眠已恢复' : '合盖动作未恢复，需手动恢复'
@@ -382,6 +389,7 @@ export function apply(ctx, config = {}) {
       'Two machine-wide power-plan settings follow the hold: the lid-close action is set to “do nothing”, and the “sleep after” timeout is set to “never”. The second one matters because on Modern Standby hardware running on battery Windows terminates system power requests five minutes after the sleep timeout expires, so a finite sleep timeout would put the machine to sleep anyway. `disable` (or an idle `apps`/`busy` policy) puts the recorded original values back. All of it is written by `powercfg` from the Host process, which needs no prompt on most builds and keeps working on battery; a locked-down machine falls back to the elevated helper task (`DshKeepAwakeLid`), then to one administrator prompt. ' +
       'A battery guard stops keep-awake by itself: while running on battery, a charge at or below `batteryFloor` (default 30%, 0 disables it) releases the request and restores both settings, silently. `set-battery-floor` changes the threshold, `dismiss-auto-stop` clears the notice. ' +
       '`lid-fix` and `sleep-revert` write the lid and sleep settings by hand when something was left behind. ' +
+      'A self-check reads the Kernel-Power 506 events once a minute while holding. If Windows entered Modern Standby during the hold, the request is escalated from system-only (0x80000001) to system + display (0x80000003), silently, and the reason is reported in `escalation`; a second event (or a lid-triggered one, which a display request cannot fix) reports `level: 3` and recommends `modern-standby-disable`. `reset-escalation` returns to the plain request. ' +
       '`modern-standby-disable` switches Modern Standby off in the registry so a closed lid can no longer suspend the machine; it also raises one administrator prompt and needs a reboot, and `modern-standby-restore` puts the recorded values back.',
     parameters: {
       type: 'object',
@@ -409,6 +417,7 @@ export function apply(ctx, config = {}) {
             'modern-standby-disable',
             'modern-standby-restore',
             'refresh',
+            'reset-escalation',
           ],
           description: 'Operation to perform.',
         },
@@ -500,6 +509,7 @@ export function apply(ctx, config = {}) {
         rebootRequired: result.rebootRequired === true,
         lid: result.lid ?? null,
         sleep: result.sleep ?? null,
+        escalation: snapshot.escalation ?? null,
         lastError: snapshot.lastError ?? null,
       }
     },

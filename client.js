@@ -55,7 +55,7 @@ window.__ModuleLoader__.load({
         'advanced.modernRestore': 'Restore the saved Modern Standby setting',
         'advanced.modernHint': 'The only switch Windows honours on builds that ignore “do nothing”. Takes effect after a reboot; while off, the machine has no sleep at all on this hardware.',
         'advanced.display': 'Also keep the display awake',
-        'advanced.displayHint': 'Rarely needed; “do nothing” is ignored on some Modern Standby builds, and this is the fallback.',
+        'advanced.displayHint': 'Rarely needed by hand: the plugin turns it on by itself if its self-check catches Windows entering Modern Standby during a hold (system-only 0x80000001 → system + display 0x80000003).',
         'advanced.grace': 'Grace after work ends',
         'advanced.graceHint': 'Keep holding this long after DSH goes idle, so a background job or a trailing file write is not cut off. 0 releases at once.',
         'advanced.seconds': 's',
@@ -109,6 +109,11 @@ window.__ModuleLoader__.load({
         'alert.lidRestore': 'Restore lid sleep',
         'alert.sleepLeftOn': 'The sleep timeout is still “never”, so the machine will not sleep when idle.',
         'alert.sleepRestore': 'Restore sleep timeout',
+        'alert.escalated': 'Windows entered Modern Standby while keep-awake was holding ({reason}, {time}).',
+        'alert.escalatedDisplay': 'The power request was upgraded from system-only (0x80000001) to system + display (0x80000003), so the screen stays on and Modern Standby cannot start.',
+        'alert.escalatedModern': 'That was not enough either — switching Modern Standby off is the last lever on this hardware (admin, reboot).',
+        'alert.escalatedReset': 'Use the plain request again',
+        'notice.escalationReset': 'Back to the plain power request.',
         'footer.note': 'Stops when off.',
         'close': 'Close',
         'minimize': 'Minimize',
@@ -164,7 +169,7 @@ window.__ModuleLoader__.load({
         'advanced.modernRestore': '恢复保存的现代待机设置',
         'advanced.modernHint': '只有在那些忽略「不采取任何操作」的版本上才管用的一招。重启后生效；关闭期间，这台机器就没有任何睡眠状态了。',
         'advanced.display': '同时保持屏幕常亮',
-        'advanced.displayHint': '一般不需要；部分「现代待机」机型会忽略「不采取任何操作」，这时它是兜底手段。',
+        'advanced.displayHint': '一般不用手动打开：自检发现保活期间仍进过现代待机时，插件自己会把请求从「仅系统」0x80000001 升级为「系统 + 显示」0x80000003。',
         'advanced.grace': '结束后宽限',
         'advanced.graceHint': 'DSH 空闲后继续保活这么久，免得后台任务或收尾写文件被掐断。填 0 表示立刻释放。',
         'advanced.seconds': '秒',
@@ -218,6 +223,11 @@ window.__ModuleLoader__.load({
         'alert.lidRestore': '恢复合盖睡眠',
         'alert.sleepLeftOn': '睡眠超时还是「从不」，机器空闲后不会自动睡眠。',
         'alert.sleepRestore': '恢复睡眠超时',
+        'alert.escalated': '保活期间 Windows 仍进过一次现代待机（{reason}，{time}）。',
+        'alert.escalatedDisplay': '电源请求已从「仅系统」(0x80000001) 升级为「系统 + 显示」(0x80000003)：屏幕保持点亮，现代待机就不会启动。',
+        'alert.escalatedModern': '升级后仍然发生过待机——这台机器上最后的手段是关闭现代待机（需管理员，重启生效）。',
+        'alert.escalatedReset': '改回普通保活',
+        'notice.escalationReset': '已改回普通电源请求。',
         'footer.note': '关闭即停止。',
         'close': '关闭',
         'minimize': '收起',
@@ -603,6 +613,20 @@ window.__ModuleLoader__.load({
         if (seconds % 3600 === 0) return `${seconds / 3600} ${t('advanced.hours')}`
         if (seconds % 60 === 0) return `${seconds / 60} ${t('advanced.minutes')}`
         return `${seconds} ${t('advanced.seconds')}`
+      }
+
+      /**
+       * Wall-clock text for an event timestamp.
+       * @param {number|null|undefined} ms
+       * @returns {string}
+       */
+      function clockText(ms) {
+        if (typeof ms !== 'number' || !Number.isFinite(ms)) return '—'
+        try {
+          return new Date(ms).toLocaleTimeString(undefined, { hour12: false })
+        } catch {
+          return '—'
+        }
       }
 
       function StartWindow() {
@@ -1125,6 +1149,50 @@ window.__ModuleLoader__.load({
                       },
                       t('alert.sleepRestore'),
                     ),
+                  ),
+                )
+              : null,
+            status?.escalation && Number(status.escalation.level) >= 2
+              ? h(
+                  'div',
+                  { className: 'dsh-ka-alert' },
+                  h(
+                    'div',
+                    null,
+                    t('alert.escalated', {
+                      reason: status.escalation.reasonText || '—',
+                      time: clockText(status.escalation.eventAt),
+                    }),
+                  ),
+                  h(
+                    'div',
+                    { className: 'dsh-ka-hint' },
+                    Number(status.escalation.level) >= 3 ? t('alert.escalatedModern') : t('alert.escalatedDisplay'),
+                  ),
+                  h(
+                    'div',
+                    { style: { display: 'flex', justifyContent: 'flex-end', gap: '6px' } },
+                    Number(status.escalation.level) >= 3
+                      ? h(
+                          'button',
+                          {
+                            type: 'button',
+                            className: 'dsh-ka-btn',
+                            disabled: pending,
+                            onClick: () => void run(store, 'modern-standby-disable', {}, () => t('notice.modernFixed')),
+                          },
+                          t('advanced.modernFix'),
+                        )
+                      : h(
+                          'button',
+                          {
+                            type: 'button',
+                            className: 'dsh-ka-btn dsh-ka-btn-ghost',
+                            disabled: pending,
+                            onClick: () => void run(store, 'reset-escalation', {}, () => t('notice.escalationReset')),
+                          },
+                          t('alert.escalatedReset'),
+                        ),
                   ),
                 )
               : null,
